@@ -199,6 +199,7 @@ class SchoolDayTimer:
                 self.save_config()
                 messagebox.showinfo("Success", "Timetable loaded successfully!")
                 self.update_status_label(f"Loaded: {os.path.basename(filename)}")
+                self.update_template_list()
     
     def save_template(self):
         day = self.day_var.get()
@@ -509,6 +510,12 @@ class SchoolDayTimer:
         if current_day in self.timetable:
             periods = self.timetable[current_day]['periods']
             
+            if not periods:
+                next_day = self.get_next_school_day(current_day)
+                if next_day in self.timetable and self.timetable[next_day]['periods']:
+                    return self.timetable[next_day]['periods'][0]
+                return None
+            
             for i, period in enumerate(periods):
                 if current_time < period['start']:
                     return period
@@ -517,10 +524,14 @@ class SchoolDayTimer:
                         return periods[i + 1]
                     else:
                         next_day = self.get_next_school_day(current_day)
-                        return self.timetable[next_day]['periods'][0]
+                        if next_day in self.timetable and self.timetable[next_day]['periods']:
+                            return self.timetable[next_day]['periods'][0]
+                        return None
         
         next_day = self.get_next_school_day(current_day)
-        return self.timetable[next_day]['periods'][0]
+        if next_day in self.timetable and self.timetable[next_day]['periods']:
+            return self.timetable[next_day]['periods'][0]
+        return None
     
     def get_next_school_day(self, current_day):
         days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -529,8 +540,12 @@ class SchoolDayTimer:
         for i in range(1, 8):
             next_index = (current_index + i) % 7
             next_day = days[next_index]
-            if next_day in self.timetable:
+            if next_day in self.timetable and self.timetable[next_day]['periods']:
                 return next_day
+        
+        for day in self.timetable.keys():
+            if self.timetable[day]['periods']:
+                return day
         
         return 'Monday'
     
@@ -576,6 +591,14 @@ class SchoolDayTimer:
         if current_day in self.timetable:
             periods = self.timetable[current_day]['periods']
             
+            if not periods:
+                next_day = self.get_next_school_day(current_day)
+                if next_day in self.timetable and self.timetable[next_day]['periods']:
+                    next_date = current_datetime.date() + timedelta(days=(list(self.timetable.keys()).index(next_day) - current_datetime.weekday()) % 7)
+                    next_start = datetime.combine(next_date, self.timetable[next_day]['periods'][0]['start'])
+                    return int((next_start - current_datetime).total_seconds())
+                return 0
+            
             for period in periods:
                 if current_time < period['start']:
                     next_start = datetime.combine(
@@ -592,10 +615,13 @@ class SchoolDayTimer:
                     return int((next_end - current_datetime).total_seconds())
         
         next_day = self.get_next_school_day(current_day)
-        days_ahead = (list(self.timetable.keys()).index(next_day) - current_datetime.weekday()) % 7
-        next_date = current_datetime.date() + timedelta(days=days_ahead)
-        next_start = datetime.combine(next_date, time(8, 45))
-        return int((next_start - current_datetime).total_seconds())
+        if next_day in self.timetable and self.timetable[next_day]['periods']:
+            days_ahead = (list(self.timetable.keys()).index(next_day) - current_datetime.weekday()) % 7
+            next_date = current_datetime.date() + timedelta(days=days_ahead)
+            next_start = datetime.combine(next_date, self.timetable[next_day]['periods'][0]['start'])
+            return int((next_start - current_datetime).total_seconds())
+        
+        return 0
     
     def update_timers(self):
         current_datetime = datetime.now()
@@ -648,6 +674,9 @@ class SchoolDayTimer:
                 )
             else:
                 self.next_period_room_label.config(text="")
+        else:
+            self.next_period_name_label.config(text="Next Period: --")
+            self.next_period_room_label.config(text="")
         
         if school_seconds == 60:
             self.send_notification("School Day", "School ends in 1 minute!")
